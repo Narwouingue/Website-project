@@ -3,3 +3,4 @@
 ./go.sum
 ./.megaignore
 ./desktop.ini
+./.gitignore
