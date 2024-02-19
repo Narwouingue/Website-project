@@ -1,5 +1,5 @@
 /videos
-go.mod
-go.sum
-.megaignore
-desktop.ini
+./go.mod
+./go.sum
+./.megaignore
+./desktop.ini
