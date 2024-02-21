@@ -13,7 +13,7 @@ import (
 var dsn = "root:2580@tcp(localhost:8080)/data?charset=utf8mb4&parseTime=True&loc=Local"
 var Db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 
-func db() {
+func ConnectToDatabase() {
 	if err != nil {
 		panic("failed to connect database")
 	}
