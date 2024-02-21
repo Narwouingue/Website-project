@@ -336,10 +336,13 @@ func returnNewVideos() []structs.Video {
 	sort.Slice(videos, func(i, j int) bool {
 		// Convert date strings to time.Time for comparison
 		date1, err := parseDate(videos[i].Date)
+		if err != nil {
+			log.Println("error 1 ")
+		}
 		date2, err := parseDate(videos[j].Date)
 		// Order by date in descending order
 		if err != nil {
-			log.Println("noooooo there's an error motherfucker")
+			log.Println("error 2")
 		}
 		return date1.After(date2)
 	})
@@ -362,20 +365,11 @@ func SearchByCategory(c *gin.Context) {
 	db.Db.Table("videos").Where("category = ?", category).Order("score desc").Find(&videos)
 
 	log.Println(videos)
-	return
+
 }
 
 func parseDate(dateStr string) (time.Time, error) {
 	return time.Parse("02-01-2006", dateStr)
-}
-
-func watchVideo(id string) {
-	var video structs.Video
-	db.Db.Table("videos").Where("id = ?", id).First(&video)
-	video.Views++
-	db.Db.Save(&video)
-	log.Println(video)
-
 }
 
 /*------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -454,10 +448,6 @@ func ChangeCreator(c *gin.Context) {
 	user.IsCreator = !user.IsCreator
 	db.Db.Save(&user)
 	c.Redirect(http.StatusSeeOther, "/user")
-}
-
-func getVideos() {
-	//c.JSON(http.StatusOK, videos)
 }
 
 func SignUp(c *gin.Context) {
