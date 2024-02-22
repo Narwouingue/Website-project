@@ -1,4 +1,4 @@
-package creatorPrivatePage
+package CreatorPrivatePage
 
 import (
 	"log"
