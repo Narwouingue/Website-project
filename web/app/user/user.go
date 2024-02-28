@@ -13,6 +13,7 @@ import (
 func Handler(c *gin.Context) {
 
 	connectedUser, message := GetConnectedUser(c)
+	c.HTML(http.StatusOK, "user.html", connectedUser)
 	if message == "error" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not connected"})
 		return

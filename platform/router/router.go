@@ -22,6 +22,8 @@ func Routes() *gin.Engine {
 	rtr.MaxMultipartMemory = 50000 << 20
 	var id, userName, category string
 
+	rtr.LoadHTMLGlob("web/template/*")
+
 	//GETS
 	rtr.GET("/video/"+id, publicAccess.Handler)                         // viewing public video
 	rtr.GET("/video/private/"+id, privateAccess.Handler)                // viewing private video
