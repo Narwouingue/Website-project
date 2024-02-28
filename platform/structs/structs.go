@@ -28,7 +28,8 @@ type User struct {
 	WatchedVideos []Video  `gorm:"column:watchedvideos"`
 	Roles         []string `gorm:"column:roles"`
 	AccessToken   string   `gorm:"column:token"`
-	IsCreator     bool     `gorm:"colum:isCreator"`
-	Subsribers    []User   `gorm:"column:subs"`
+	IsCreator     bool     `gorm:"column:isCreator"`
+	Followings    []User   `gorm:"column:followings"`
+	Followers     []User   `gorm:"column:subs"`
 	Tokens        int      `gorm:"column:tokens"`
 }
