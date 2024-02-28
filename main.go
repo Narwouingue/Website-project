@@ -66,6 +66,7 @@ func Follow(c *gin.Context) {
 }
 
 func Unfollow(c *gin.Context) {
+
 	user, message := GetConnectedUser(c)
 	creatorName := c.GetString("creator")
 	var creator structs.User
