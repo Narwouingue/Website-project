@@ -390,13 +390,6 @@ func TrendingAlgorithm() {
 
 }
 
-func Home(c *gin.Context) {
-	trending := returnTrendingVideos()
-	new := returnNewVideos()
-
-	c.JSON(http.StatusOK, gin.H{"trending": trending, "new": new})
-}
-
 // Non rooter functions
 func returnTrendingVideos() []structs.Video {
 	var videos []structs.Video
@@ -470,24 +463,6 @@ func GetConnectedUser(c *gin.Context) (returnedUser structs.User, message string
 	db.Db.Table("users").Where("token = ?", token).First(&user)
 	return user, "success"
 
-}
-
-func CreatorPage(c *gin.Context) {
-	userName := c.Param("userName")
-	var user structs.User
-	err := db.Db.Table("users").Where("username = ?", userName).First(&user).Error
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Creator not found"})
-		return
-	}
-	if !user.IsCreator {
-		c.JSON(http.StatusNotFound, gin.H{"error": "This user is not a creator"})
-		return
-	}
-
-	videos := getAllVideosFromACreator(userName)
-
-	c.JSON(http.StatusAccepted, gin.H{"videos": videos})
 }
 
 func DeleteUser(c *gin.Context) {
