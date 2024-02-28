@@ -8,7 +8,6 @@ import (
 	"package/platform/router"
 	"package/platform/structs"
 	"regexp"
-	"sort"
 	"time"
 
 	"crypto/md5"
@@ -388,37 +387,6 @@ func TrendingAlgorithm() {
 
 	time.AfterFunc(time.Hour, TrendingAlgorithm)
 
-}
-
-// Non rooter functions
-func returnTrendingVideos() []structs.Video {
-	var videos []structs.Video
-	db.Db.Table("videos").Order("score desc").Find(&videos)
-	log.Println(videos)
-	return videos
-}
-
-func returnNewVideos() []structs.Video {
-	var videos []structs.Video
-	db.Db.Table("videos").Find(&videos)
-
-	// Custom sorting function to order videos by date in descending order
-	sort.Slice(videos, func(i, j int) bool {
-		// Convert date strings to time.Time for comparison
-		date1, err := parseDate(videos[i].Date)
-		if err != nil {
-			log.Println("error 1 ")
-		}
-		date2, err := parseDate(videos[j].Date)
-		// Order by date in descending order
-		if err != nil {
-			log.Println("error 2")
-		}
-		return date1.After(date2)
-	})
-
-	log.Println(videos)
-	return videos
 }
 
 func getAllVideosFromACreator(username string) []structs.Video {
