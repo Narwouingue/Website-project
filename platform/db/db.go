@@ -3,7 +3,7 @@ package db
 import (
 	"log"
 
-	"package/structs"
+	"package/platform/structs"
 
 	"github.com/joho/godotenv"
 	"gorm.io/driver/mysql"

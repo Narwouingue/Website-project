@@ -2,8 +2,8 @@ package categorySearch
 
 import (
 	"log"
-	"package/db"
-	"package/structs"
+	"package/platform/db"
+	"package/platform/structs"
 
 	"github.com/gin-gonic/gin"
 )

@@ -3,8 +3,8 @@ package home
 import (
 	"log"
 	"net/http"
-	"package/db"
-	"package/structs"
+	"package/platform/db"
+	"package/platform/structs"
 	"sort"
 	"time"
 

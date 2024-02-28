@@ -3,8 +3,8 @@ package CreatorPrivatePage
 import (
 	"log"
 	"net/http"
-	"package/db"
-	"package/structs"
+	"package/platform/db"
+	"package/platform/structs"
 
 	"github.com/gin-gonic/gin"
 )
