@@ -30,6 +30,8 @@ type User struct {
 	AccessToken   string   `gorm:"column:token"`
 	IsCreator     bool     `gorm:"column:isCreator"`
 	Followings    []User   `gorm:"column:followings"`
-	Followers     []User   `gorm:"column:subs"`
+	Followers     int      `gorm:"column:followers"`
+	Subscribings  []User   `gorm:"column:subscribings"`
+	Subscribers   int      `gorm:"column:subscribers"`
 	Tokens        int      `gorm:"column:tokens"`
 }

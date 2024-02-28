@@ -42,7 +42,83 @@ func main() {
 	rtr.POST("/tip", SendToken)
 	rtr.POST("/modifyVideo", ModifyVideo)
 
+	rtr.POST("/follow", Follow)
+	rtr.POST("/unfollow", Unfollow)
+	rtr.POST("/subscribe", Subscribe)
+	rtr.POST("/unsubscribe", Unsubscribe)
+
 	go TrendingAlgorithm()
+}
+
+func Follow(c *gin.Context) {
+	user, message := GetConnectedUser(c)
+	creatorName := c.GetString("creator")
+	var creator structs.User
+	db.Db.Table("users").Where("username = ?", creatorName).First(&creator)
+	if message == "error" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not connected"})
+		return
+	}
+	user.Followings = append(user.Followings, creator)
+	creator.Followers++
+	db.Db.Save("users")
+
+}
+
+func Unfollow(c *gin.Context) {
+	user, message := GetConnectedUser(c)
+	creatorName := c.GetString("creator")
+	var creator structs.User
+	db.Db.Table("users").Where("username = ?", creatorName).First(&creator)
+	if message == "error" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not connected"})
+		return
+	}
+	var result []structs.User
+
+	for _, v := range user.Followings {
+		if v.UserName != creator.UserName {
+			result = append(result, v)
+		}
+	}
+	user.Followings = result
+	creator.Followers--
+	db.Db.Save("users")
+}
+
+func Subscribe(c *gin.Context) {
+	user, message := GetConnectedUser(c)
+	creatorName := c.GetString("creator")
+	var creator structs.User
+	db.Db.Table("users").Where("username = ?", creatorName).First(&creator)
+	if message == "error" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not connected"})
+		return
+	}
+	user.Followings = append(user.Subscribings, creator)
+	creator.Followers++
+	db.Db.Save("users")
+}
+
+func Unsubscribe(c *gin.Context) {
+	user, message := GetConnectedUser(c)
+	creatorName := c.GetString("creator")
+	var creator structs.User
+	db.Db.Table("users").Where("username = ?", creatorName).First(&creator)
+	if message == "error" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not connected"})
+		return
+	}
+	var result []structs.User
+
+	for _, v := range user.Subscribings {
+		if v.UserName != creator.UserName {
+			result = append(result, v)
+		}
+	}
+	user.Subscribings = result
+	creator.Followers--
+	db.Db.Save("users")
 }
 
 // TOKENS //
