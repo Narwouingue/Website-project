@@ -1,11 +1,8 @@
 package db
 
 import (
-	"log"
-
 	"package/platform/structs"
 
-	"github.com/joho/godotenv"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -19,7 +16,4 @@ func ConnectToDatabase() {
 	}
 	Db.AutoMigrate(&structs.Video{}, &structs.User{})
 
-	if err := godotenv.Load(); err != nil {
-		log.Fatalf("Failed to load the env vars: %v", err)
-	}
 }
