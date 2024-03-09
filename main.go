@@ -31,6 +31,8 @@ import (
 	"package/web/app/publicAccess"
 	categorySearch "package/web/app/searchByCategory"
 	"package/web/app/user"
+
+	"github.com/joho/godotenv"
 )
 
 //Gestion des tokens ici
@@ -39,6 +41,10 @@ import (
 
 func main() {
 
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Fatal("Failed to load environment variables")
+	}
 	rtr := gin.Default()
 	db.ConnectToDatabase()
 	rtr.MaxMultipartMemory = 50000 << 20
@@ -108,6 +114,9 @@ func getJoinToken(room, identity string) (string, error) {
 	at.AddGrant(grant).
 		SetIdentity(identity).
 		SetValidFor(time.Hour)
+
+	log.Print(os.Getenv("LIVEKIT_API_KEY"))
+	log.Print(os.Getenv("LIVEKIT_API_SECRET"))
 
 	return at.ToJWT()
 }
