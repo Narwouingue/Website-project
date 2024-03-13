@@ -11,21 +11,16 @@ import (
 
 func Handler(c *gin.Context) {
 	userName := c.Param("userName")
-	var user structs.User
 
-	err := db.Db.Table("users").Where("username = ?", userName).First(&user).Error
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Creator not found"})
-		return
-	}
-	if !user.IsCreator {
-		c.JSON(http.StatusNotFound, gin.H{"error": "This user is not a creator"})
+	var creator structs.Creator
+	if err := db.Db.Table("creators").Where("creatorname = ?", userName).First(&creator).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "creator does not exist"})
 		return
 	}
 
 	connectedUser, message := GetConnectedUser(c)
 
-	err = db.Db.Table("users").Where("username = ?", userName).Where("subcribers = ?", connectedUser).Find(&user).Error
+	err := db.Db.Table("users").Where("username = ?", userName).Where("subcribers = ?", connectedUser).Find(&creator).Error
 	if err != nil {
 		c.JSON(http.StatusNotAcceptable, gin.H{"error": "You're not subscribed to this creator"})
 		return

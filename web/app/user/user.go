@@ -20,9 +20,15 @@ func Handler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusAccepted, gin.H{"fullName": connectedUser.FullName, "username": connectedUser.UserName, "email": connectedUser.Email, "tokens": connectedUser.Tokens})
-	if connectedUser.IsCreator {
-		videos := getAllVideosFromACreator(connectedUser.UserName)
-		c.JSON(http.StatusAccepted, gin.H{"videos": videos})
+	var creator structs.Creator
+	if err := db.Db.Table("creators").Where("creatorname = ?", connectedUser).First(&creator).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user is not a creator"})
+		return
+	} else {
+
+		videos := getAllVideosFromACreator(creator.CreatorName)
+
+		c.JSON(http.StatusAccepted, gin.H{"isCreator": true, "videos": videos}) // change the function to make it return the videos informations instead of all of them
 	}
 
 }

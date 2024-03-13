@@ -14,6 +14,6 @@ func ConnectToDatabase() {
 	if err != nil {
 		panic("failed to connect database")
 	}
-	Db.AutoMigrate(&structs.Video{}, &structs.User{})
+	Db.AutoMigrate(&structs.Video{}, &structs.User{}, &structs.Creator{})
 
 }

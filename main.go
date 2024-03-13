@@ -48,7 +48,7 @@ func main() {
 	rtr := gin.Default()
 	db.ConnectToDatabase()
 	rtr.MaxMultipartMemory = 50000 << 20
-	var id, userName, category string
+	var id, creator, category string
 
 	rtr.LoadHTMLGlob("web/template/*")
 
@@ -73,8 +73,8 @@ func main() {
 	//GETS
 	rtr.GET("/video/"+id, publicAccess.Handler)                         // viewing public video
 	rtr.GET("/video/private/"+id, privateAccess.Handler)                // viewing private video
-	rtr.GET("/crator/"+userName, creatorPage.Handler)                   // get the page of a crator
-	rtr.GET("/crator/"+userName+"/private", CreatorPrivatePage.Handler) // get the private videos of a creator
+	rtr.GET("/creator/"+creator, creatorPage.Handler)                   // get the page of a crator
+	rtr.GET("/creator/"+creator+"/private", CreatorPrivatePage.Handler) // get the private videos of a creator
 	rtr.GET("/home", home.Handler)                                      // homepage
 	rtr.GET("/logoff", logoff.Handler)                                  // log the user off
 	rtr.GET("/category/"+category, categorySearch.Handler)              // search by category
@@ -87,14 +87,6 @@ func main() {
 			log.Fatal("can't connect to the room")
 		}
 		c.JSON(http.StatusAccepted, gin.H{"token": token})
-	})
-
-	http.HandleFunc("/getToken", func(w http.ResponseWriter, r *http.Request) {
-		token, err := getJoinToken("my-room", "identity")
-		if err != nil {
-			log.Fatal("can't connect to the room")
-		}
-		w.Write([]byte(token))
 	})
 
 	log.Print("Server listening on http://localhost:3000/")
@@ -124,8 +116,8 @@ func getJoinToken(room, identity string) (string, error) {
 func Follow(c *gin.Context) {
 	user, message := GetConnectedUser(c)
 	creatorName := c.GetString("creator")
-	var creator structs.User
-	db.Db.Table("users").Where("username = ?", creatorName).First(&creator)
+	var creator structs.Creator
+	db.Db.Table("creators").Where("username = ?", creatorName).First(&creator)
 	if message == "error" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not connected"})
 		return
@@ -133,6 +125,7 @@ func Follow(c *gin.Context) {
 	user.Followings = append(user.Followings, creator)
 	creator.Followers++
 	db.Db.Save("users")
+	db.Db.Save("creators")
 
 }
 
@@ -140,29 +133,30 @@ func Unfollow(c *gin.Context) {
 
 	user, message := GetConnectedUser(c)
 	creatorName := c.GetString("creator")
-	var creator structs.User
-	db.Db.Table("users").Where("username = ?", creatorName).First(&creator)
+	var creator structs.Creator
+	db.Db.Table("Creators").Where("username = ?", creatorName).First(&creator)
 	if message == "error" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not connected"})
 		return
 	}
-	var result []structs.User
+	var result []structs.Creator
 
 	for _, v := range user.Followings {
-		if v.UserName != creator.UserName {
+		if v.CreatorName != creator.CreatorName {
 			result = append(result, v)
 		}
 	}
 	user.Followings = result
 	creator.Followers--
 	db.Db.Save("users")
+	db.Db.Save("creators")
 }
 
 func Subscribe(c *gin.Context) {
 	user, message := GetConnectedUser(c)
 	creatorName := c.GetString("creator")
-	var creator structs.User
-	db.Db.Table("users").Where("username = ?", creatorName).First(&creator)
+	var creator structs.Creator
+	db.Db.Table("creators").Where("username = ?", creatorName).First(&creator)
 	if message == "error" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not connected"})
 		return
@@ -170,88 +164,101 @@ func Subscribe(c *gin.Context) {
 	user.Followings = append(user.Subscribings, creator)
 	creator.Followers++
 	db.Db.Save("users")
+	db.Db.Save("creators")
 }
 
 func Unsubscribe(c *gin.Context) {
 	user, message := GetConnectedUser(c)
 	creatorName := c.GetString("creator")
-	var creator structs.User
+	var creator structs.Creator
 	db.Db.Table("users").Where("username = ?", creatorName).First(&creator)
 	if message == "error" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not connected"})
 		return
 	}
-	var result []structs.User
+	var result []structs.Creator
 
 	for _, v := range user.Subscribings {
-		if v.UserName != creator.UserName {
+		if v.CreatorName != creator.CreatorName {
 			result = append(result, v)
 		}
 	}
 	user.Subscribings = result
 	creator.Followers--
 	db.Db.Save("users")
+	db.Db.Save("creators")
 }
 
 // TOKENS //
 func SendToken(c *gin.Context) {
-	creatorName := c.GetString("creator")
-	number := c.GetInt("number")
-	token, err := c.Cookie("connection")
-	if err != nil {
+	// Check if user is connected
+	user, message := GetConnectedUser(c)
+	if message == "error" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "user not connected"})
 		return
 	}
-	var user, creator structs.User
-	db.Db.Table("users").Where("token = ?", token).First(&user)
+
+	// Check if the user has enough tokens
+	number := c.GetInt("number")
 	if user.Tokens < number {
 		c.JSON(http.StatusNotAcceptable, gin.H{"error": "not enough tokens available"})
 		return
 	}
 
-	db.Db.Table("users").Where("username = ?", creatorName).First(&creator)
-	if !creator.IsCreator {
-		c.JSON(http.StatusNotAcceptable, gin.H{"error": "Bad sending", "message": "The user you are trying to send tokens to is not a creator"})
+	// check if creator exists
+	creatorName := c.GetString("creator")
+	var creator structs.Creator
+	if err := db.Db.Table("creators").Where("creatorname = ?", creatorName).First(&creator).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "creator does not exist"})
 		return
 	}
 
+	// Perform the transfer
 	user.Tokens -= number
-	creator.Tokens += number
-	db.Db.Save("users")
+	userCreator := creator.User
+	userCreator.Tokens += number
+
+	// Send the confirmation and save the database
 	c.JSON(http.StatusAccepted, gin.H{"message": "Tokens sent"})
+	db.Db.Save("users")
+	db.Db.Save("creators")
 }
 
 // VIDEOS //
 
 func CreatorPrivateVideos(c *gin.Context) {
-	userName := c.Param("userName")
-	var user structs.User
 
-	err := db.Db.Table("users").Where("username = ?", userName).First(&user).Error
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Creator not found"})
-		return
-	}
-	if !user.IsCreator {
-		c.JSON(http.StatusNotFound, gin.H{"error": "This user is not a creator"})
+	// Check if creator exists
+	creator := c.Param("creator")
+	if err := db.Db.Table("creators").Where("creatorname = ?", creator).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "creator does not exist"})
 		return
 	}
 
+	// check if user is subscribed
 	connectedUser, message := GetConnectedUser(c)
-
-	err = db.Db.Table("users").Where("username = ?", userName).Where("subcribers = ?", connectedUser).Find(&user).Error
-	if err != nil {
-		c.JSON(http.StatusNotAcceptable, gin.H{"error": "You're not subscribed to this creator"})
-		return
+	var count int
+	for _, v := range connectedUser.Subscribings {
+		if v.CreatorName == creator {
+			break
+		}
+		if len(connectedUser.Subscribings) == count {
+			c.JSON(http.StatusNotAcceptable, gin.H{"error": "You're not subscribed to this creator"})
+			return
+		}
+		count++
 	}
-	videos := getAllVideosFromACreator(userName)
-	var privateVideos []structs.Video
+
+	//Fetch filepaths of private videos
+	videos := getAllVideosFromACreator(creator)
+	var privateVideos []string
 	for _, v := range videos {
 		if !v.IsPublic {
-			privateVideos = append(privateVideos, v)
+			privateVideos = append(privateVideos, v.FilePath)
 		}
 	}
 
+	//Return private videos
 	c.JSON(http.StatusAccepted, gin.H{"videos": privateVideos, "message": message})
 }
 
@@ -283,27 +290,37 @@ func PostVideos(c *gin.Context) {
 	c.String(http.StatusOK, fmt.Sprintf("'%s' uploaded!", file.Filename))
 	title := c.GetString("Title")
 
-	token, err := c.Cookie("connection")
-	if err != nil {
+	// check if user is connected
+	user, message := GetConnectedUser(c)
+	if message == "error" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "user not connected"})
 		c.Redirect(http.StatusSeeOther, "/signin")
 		return
 	}
 
-	var user structs.User
-	db.Db.Table("users").Where("token = ?", token).First(&user)
-	if !user.IsCreator {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user is not a creator"})
+	// check if user is a creator
+	var creator structs.Creator
+	if db.Db.Where("user = ?", user).First(&creator).Error != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "You are not a creator"})
 		return
 	}
-	owner := user.UserName
+
 	artist := user.FullName
 	isPublic := c.GetBool("public")
 	category := c.GetString("Category")
 	//sstring userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier).Value;
 
 	//create the reference in the database
-	db.Db.Table("videos").Create(&structs.Video{ID: file.Filename, Title: title, Owner: owner, Artist: artist, Views: 0, Category: category, Date: date, FilePath: "/videos/" + category + "/", IsPublic: isPublic})
+	db.Db.Table("videos").Create(&structs.Video{
+		ID:       file.Filename,
+		Title:    title,
+		Owner:    user,
+		Artist:   artist,
+		Views:    0,
+		Category: category,
+		Date:     date,
+		FilePath: "/videos/" + category + "/",
+		IsPublic: isPublic})
 }
 
 func DeleteVideo(c *gin.Context) {
@@ -326,29 +343,15 @@ func DeleteVideo(c *gin.Context) {
 
 }
 func ModifyVideo(c *gin.Context) {
-	token, err := c.Cookie("connection")
-	if err != nil {
+	// check if user is connected
+	user, message := GetConnectedUser(c)
+	if message == "error" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "user not connected"})
 		c.Redirect(http.StatusSeeOther, "/signin")
 		return
 	}
 
-	var user structs.User
-	db.Db.Table("users").Where("token = ?", token).First(&user)
-	if !user.IsCreator {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user is not a creator"})
-		return
-	}
-	owner := user.UserName
-
-	title := c.GetString("title")
-	videoOwner := c.GetString("owner")
-	isPublic := c.GetBool("public")
-	category := c.GetString("Category")
-	if owner != videoOwner && user.UserName != "root" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "not allowed", "message": "You are not allowed to perform this action"})
-		return
-	}
+	// check if the video exists
 	id := c.GetString("id")
 	var video structs.Video
 	if db.Db.Table("id").Where("id = ?", id).First(&video).Error != nil {
@@ -356,12 +359,24 @@ func ModifyVideo(c *gin.Context) {
 		return
 	}
 
+	// check if the user is the owner of the video
+	var creator structs.Creator
+	db.Db.Table("creators").Where("user = ?", user).First(&creator)
+	if &video.Owner != &creator.User {
+		c.JSON(http.StatusForbidden, gin.H{"error": "not allowed", "message": "You are not allowed to perform this action"})
+		return
+	}
+
+	// get the new informations
+	title := c.GetString("title")
+	isPublic := c.GetBool("public")
+	category := c.GetString("Category")
+
 	//update the reference in the database
 	video.Title = title
 	video.Category = category
 	video.FilePath = "/videos/" + category + "/"
 	video.IsPublic = isPublic
-
 	db.Db.Save(&video)
 
 }
@@ -531,13 +546,20 @@ func DeleteUser(c *gin.Context) {
 }
 
 func ChangeCreator(c *gin.Context) {
-	token, err := c.Cookie("connection")
-	if err != nil {
+	user, message := GetConnectedUser(c)
+	if message == "error" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "user not connected"})
+		return
 	}
-	var user structs.User
-	db.Db.Table("users").Where("token = ?", token).First(&user)
-	user.IsCreator = !user.IsCreator
+	creatorName := c.GetString("creatorname")
+
+	db.Db.Create(structs.Creator{
+		CreatorName: creatorName,
+		Followers:   0,
+		Subscribers: 0,
+		IsLive:      false,
+	})
+
 	db.Db.Save(&user)
 	c.Redirect(http.StatusSeeOther, "/user")
 }
