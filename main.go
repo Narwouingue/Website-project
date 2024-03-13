@@ -324,18 +324,17 @@ func PostVideos(c *gin.Context) {
 }
 
 func DeleteVideo(c *gin.Context) {
-	token, err := c.Cookie("connection")
-	if err != nil {
+	user, message := GetConnectedUser(c)
+	if message == "error" {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "user not connected"})
 		return
 	}
-	var user structs.User
-	db.Db.Table("users").Where("token = ?", token).First(&user)
-	videoOwner := c.GetString("owner")
+	var video structs.Video
+	db.Db.Table("videos").Where("id = ?", c.GetString("id")).First(&video)
 
-	if user.UserName == videoOwner || user.UserName == "root" {
-		db.Db.Table("videos").Where("id = ?", c.GetString("id")).Delete(&structs.Video{})
-	} else if err != nil {
+	if &user == &video.Owner || user.UserName == "root" {
+		db.Db.Table("videos").Where("id = ?", c.GetString("id")).Delete(&video)
+	} else {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "You can't perform that action"})
 		return
 
