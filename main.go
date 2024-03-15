@@ -59,7 +59,6 @@ func main() {
 	rtr.POST("/deleteUser", DeleteUser)
 	rtr.POST("/deleteVideo", DeleteVideo)
 	rtr.POST("/like", LikeVideo)
-	rtr.POST("/dislike", DislikeVideo)
 	rtr.POST("/tip", SendToken)
 	rtr.POST("/modifyVideo", ModifyVideo)
 
@@ -95,9 +94,7 @@ func main() {
 	}
 
 }
-
 func getJoinToken(room, identity string) (string, error) {
-	//config = readFile(config)
 	at := auth.NewAccessToken(os.Getenv("LIVEKIT_API_KEY"), os.Getenv("LIVEKIT_API_SECRET"))
 	grant := &auth.VideoGrant{
 		RoomJoin: true,
@@ -114,14 +111,22 @@ func getJoinToken(room, identity string) (string, error) {
 }
 
 func Follow(c *gin.Context) {
+	// check if user is connected
 	user, message := GetConnectedUser(c)
-	creatorName := c.GetString("creator")
-	var creator structs.Creator
-	db.Db.Table("creators").Where("username = ?", creatorName).First(&creator)
 	if message == "error" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not connected"})
 		return
 	}
+
+	//Get the creator
+	creatorName := c.GetString("creator")
+	var creator structs.Creator
+	err := db.Db.Table("creators").Where("username = ?", creatorName).First(&creator).Error
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Creator doesn't exist"})
+	}
+
+	// Add the creator to the user's followings
 	user.Followings = append(user.Followings, creator)
 	creator.Followers++
 	db.Db.Save("users")
@@ -130,22 +135,30 @@ func Follow(c *gin.Context) {
 }
 
 func Unfollow(c *gin.Context) {
-
+	// check if user is connected
 	user, message := GetConnectedUser(c)
-	creatorName := c.GetString("creator")
-	var creator structs.Creator
-	db.Db.Table("Creators").Where("username = ?", creatorName).First(&creator)
 	if message == "error" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not connected"})
 		return
 	}
-	var result []structs.Creator
 
+	//Get the creator
+	creatorName := c.GetString("creator")
+	var creator structs.Creator
+	err := db.Db.Table("creators").Where("username = ?", creatorName).First(&creator).Error
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Creator doesn't exist"})
+	}
+
+	// Create the new following slice
+	var result []structs.Creator
 	for _, v := range user.Followings {
 		if v.CreatorName != creator.CreatorName {
 			result = append(result, v)
 		}
 	}
+
+	// Remove the creator from the user's followings
 	user.Followings = result
 	creator.Followers--
 	db.Db.Save("users")
@@ -153,14 +166,19 @@ func Unfollow(c *gin.Context) {
 }
 
 func Subscribe(c *gin.Context) {
+	// check if user is connected
 	user, message := GetConnectedUser(c)
-	creatorName := c.GetString("creator")
-	var creator structs.Creator
-	db.Db.Table("creators").Where("username = ?", creatorName).First(&creator)
 	if message == "error" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not connected"})
 		return
 	}
+
+	//Get the creator
+	creatorName := c.GetString("creator")
+	var creator structs.Creator
+	db.Db.Table("creators").Where("username = ?", creatorName).First(&creator)
+
+	// Add the creator to the user's subscribings
 	user.Followings = append(user.Subscribings, creator)
 	creator.Followers++
 	db.Db.Save("users")
@@ -168,21 +186,26 @@ func Subscribe(c *gin.Context) {
 }
 
 func Unsubscribe(c *gin.Context) {
+	// check if user is connected
 	user, message := GetConnectedUser(c)
-	creatorName := c.GetString("creator")
-	var creator structs.Creator
-	db.Db.Table("users").Where("username = ?", creatorName).First(&creator)
 	if message == "error" {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not connected"})
 		return
 	}
-	var result []structs.Creator
+	//Get the creator
+	creatorName := c.GetString("creator")
+	var creator structs.Creator
+	db.Db.Table("users").Where("username = ?", creatorName).First(&creator)
 
+	// Create the new subscribing slice
+	var result []structs.Creator
 	for _, v := range user.Subscribings {
 		if v.CreatorName != creator.CreatorName {
 			result = append(result, v)
 		}
 	}
+
+	// Remove the creator from the user's subscribings
 	user.Subscribings = result
 	creator.Followers--
 	db.Db.Save("users")
@@ -267,26 +290,23 @@ func PrivateAccess(c *gin.Context) {
 }
 
 func PostVideos(c *gin.Context) {
+	// Generate and ID
 	newID := uuid.New().String()
 	isIdUsed := db.Db.Table("videos").Where("id = ?", newID).First(&structs.Video{})
-
 	for isIdUsed.Error == nil {
 		newID = uuid.New().String()
 		isIdUsed = db.Db.First("id = ?", newID)
 		log.Println("boucle")
 
 	}
-	currentTime := time.Now()
-	date := currentTime.Format("02-01-2006")
 
 	// single file
 	file, _ := c.FormFile("file")
-
 	log.Println(file.Filename)
 	file.Filename = newID
+
 	// Upload the file to specific dst.
 	c.SaveUploadedFile(file, "./videos")
-
 	c.String(http.StatusOK, fmt.Sprintf("'%s' uploaded!", file.Filename))
 	title := c.GetString("Title")
 
@@ -305,10 +325,12 @@ func PostVideos(c *gin.Context) {
 		return
 	}
 
+	// declare variables
+	currentTime := time.Now()
+	date := currentTime.Format("02-01-2006")
 	artist := user.FullName
 	isPublic := c.GetBool("public")
 	category := c.GetString("Category")
-	//sstring userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier).Value;
 
 	//create the reference in the database
 	db.Db.Table("videos").Create(&structs.Video{
@@ -324,22 +346,24 @@ func PostVideos(c *gin.Context) {
 }
 
 func DeleteVideo(c *gin.Context) {
+	// check if user is connected
 	user, message := GetConnectedUser(c)
 	if message == "error" {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "user not connected"})
 		return
 	}
+
+	// check if the user is the owner of the video
 	var video structs.Video
 	db.Db.Table("videos").Where("id = ?", c.GetString("id")).First(&video)
-
 	if &user == &video.Owner || user.UserName == "root" {
+		// delete the video
 		db.Db.Table("videos").Where("id = ?", c.GetString("id")).Delete(&video)
 	} else {
+		// return an error
 		c.JSON(http.StatusBadGateway, gin.H{"error": "You can't perform that action"})
 		return
-
 	}
-
 }
 func ModifyVideo(c *gin.Context) {
 	// check if user is connected
@@ -381,63 +405,51 @@ func ModifyVideo(c *gin.Context) {
 }
 
 func LikeVideo(c *gin.Context) {
-	var video, isLiked structs.Video
-	id := c.GetString("id")
+	// check if user is connected
 	connectedUser, message := GetConnectedUser(c)
-	db.Db.Table("videos").Where("id = ?", id).First(&video)
 	if message == "error" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "user not connected"})
 		return
 	}
 
-	err := db.Db.Table("users").Where("username = ?", connectedUser.UserName).Where("likes = ?", id).First(&isLiked).Error
-	if err == nil {
-		c.JSON(http.StatusOK, gin.H{"message": "video unliked"})
-		video.Likes--
-		db.Db.Save(&video)
-		return
-	} else if db.Db.Table("users").Where("username = ?", connectedUser.UserName).Where("dislikes = ?", id).First(&isLiked).Error != nil {
-		video.Likes++
-		video.Dislikes--
-		db.Db.Table("users").Where("username = ?", connectedUser.UserName).Where("dislikes = ?", id).Delete(&isLiked)
-		db.Db.Save(&video)
-		return
-	}
-	video.Likes++
-	db.Db.Save(&video)
+	// Get the video
+	var video structs.Video
+	id := c.GetString("id")
+	db.Db.Table("videos").Where("id = ?", id).First(&video)
 
+	// Remove the like
+	if isLiked(c, connectedUser, id) {
+		video.Likes--
+		var newLikes []structs.Video
+		for i := range connectedUser.Likes {
+			if connectedUser.Likes[i].ID != video.ID {
+				newLikes = append(newLikes, connectedUser.Likes[i])
+			}
+		}
+		connectedUser.Likes = newLikes
+		c.JSON(http.StatusOK, gin.H{"message": "like removed"})
+	} else { // Add the like
+		video.Likes++
+		connectedUser.Likes = append(connectedUser.Likes, video)
+		c.JSON(http.StatusOK, gin.H{"message": "like added"})
+	}
+
+	// Save the changes
+	db.Db.Save(&connectedUser)
+	db.Db.Save(&video)
 	log.Println(video)
 
 }
 
-func DislikeVideo(c *gin.Context) {
-	var video, isLiked structs.Video
-	id := c.GetString("id")
-	connectedUser, message := GetConnectedUser(c)
+func isLiked(c *gin.Context, user structs.User, id string) bool {
+	var video structs.Video
 	db.Db.Table("videos").Where("id = ?", id).First(&video)
-	if message == "error" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "user not connected"})
-		return
+	for i := range user.Likes {
+		if user.Likes[i].ID == video.ID {
+			return true
+		}
 	}
-
-	err := db.Db.Table("users").Where("username = ?", connectedUser.UserName).Where("dislikes = ?", id).First(&isLiked).Error
-	if err == nil {
-		c.JSON(http.StatusOK, gin.H{"message": "video unliked"})
-		video.Dislikes--
-		db.Db.Save(&video)
-		return
-	} else if db.Db.Table("users").Where("username = ?", connectedUser.UserName).Where("likes = ?", id).First(&isLiked).Error != nil {
-		video.Likes--
-		video.Dislikes++
-		db.Db.Table("users").Where("username = ?", connectedUser.UserName).Where("likes = ?", id).Delete(&isLiked)
-		db.Db.Save(&video)
-		return
-	}
-	video.Dislikes++
-
-	db.Db.Save(&video)
-
-	log.Println(video)
+	return false
 
 }
 
