@@ -418,7 +418,7 @@ func LikeVideo(c *gin.Context) {
 	db.Db.Table("videos").Where("id = ?", id).First(&video)
 
 	// Remove the like
-	if isLiked(c, connectedUser, id) {
+	if isLiked(connectedUser, id) {
 		video.Likes--
 		var newLikes []structs.Video
 		for i := range connectedUser.Likes {
@@ -441,9 +441,12 @@ func LikeVideo(c *gin.Context) {
 
 }
 
-func isLiked(c *gin.Context, user structs.User, id string) bool {
+func isLiked(user structs.User, id string) bool {
+	// get the video
 	var video structs.Video
 	db.Db.Table("videos").Where("id = ?", id).First(&video)
+
+	// check if the user has already liked the video
 	for i := range user.Likes {
 		if user.Likes[i].ID == video.ID {
 			return true
@@ -454,6 +457,7 @@ func isLiked(c *gin.Context, user structs.User, id string) bool {
 }
 
 func TrendingAlgorithm() {
+	// declare the constants and variables
 	const (
 		viewsWeight    = 0.3
 		likesWeight    = 0.6
@@ -462,6 +466,8 @@ func TrendingAlgorithm() {
 	cutoffDate := time.Now().AddDate(0, -2, 0)
 	var videos []structs.Video
 	var filteredVideos []structs.Video
+
+	// sort the videos by views
 	db.Db.Table("videos").Order("views desc").Find(&videos)
 	for _, video := range videos {
 		videoDate, err := parseDate(video.Date)
@@ -477,40 +483,44 @@ func TrendingAlgorithm() {
 		}
 	}
 
+	// apply the weights
 	for i := range filteredVideos {
 		content := &filteredVideos[i]
 		contentScore := viewsWeight*float64(content.Views) + likesWeight*float64(content.Likes) // + commentsWeight*float64(len(content.Comments))
 		content.Score = contentScore
 	}
 
+	// Call the function again after 1 hour
 	time.AfterFunc(time.Hour, TrendingAlgorithm)
 
 }
 
 func getAllVideosFromACreator(username string) []structs.Video {
+	// Fetch all the videos of a creator
 	var videos []structs.Video
 	db.Db.Table("videos").Where("owner = ?", username).Find(&videos)
-	log.Println(videos)
+	log.Println("Retrieved all the videos of creator:", username, videos)
 	return videos
-
 }
 
 func SearchByCategory(c *gin.Context) {
 	category := c.Param("category")
 	var videos []structs.Video
-	db.Db.Table("videos").Where("category = ?", category).Order("score desc").Find(&videos)
 
-	log.Println(videos)
+	// Search videos by category
+	if db.Db.Table("videos").Where("category = ?", category).Order("score desc").Find(&videos).Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Category not found"})
+		return
+	}
 
+	log.Printf("Retrieved videos by category: %s, %v\n", category, videos)
+	c.JSON(http.StatusOK, videos)
 }
 
 func parseDate(dateStr string) (time.Time, error) {
+	// gives the date in the format dd-mm-yyyy
 	return time.Parse("02-01-2006", dateStr)
 }
-
-/*------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-
-// USERS //
 
 func mdHashing(input string) string {
 	byteInput := []byte(input)
@@ -532,39 +542,48 @@ func GetConnectedUser(c *gin.Context) (returnedUser structs.User, message string
 }
 
 func DeleteUser(c *gin.Context) {
-	id := c.GetString("id")
-	token, err := c.Cookie("connection")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user not connected"})
-		return
-	}
-	var user structs.User
-	err = db.Db.Table("users").Where("(email = ? OR username = ?) AND password = ?", id, id, mdHashing(c.GetString("password"))).First(&user).Error
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
-		return
-	}
-
-	if token != user.AccessToken {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid access token"})
-		return
-	}
-
-	// Delete the user from the database
-	db.Db.Table("users").Delete(&user)
-	c.JSON(http.StatusAccepted, gin.H{"message": "user successfully deleted"})
-
-}
-
-func ChangeCreator(c *gin.Context) {
+	// check if user is connected
 	user, message := GetConnectedUser(c)
 	if message == "error" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "user not connected"})
 		return
 	}
-	creatorName := c.GetString("creatorname")
 
+	// check if the credentials are valid
+	id := c.GetString("id")
+	password := c.GetString("password")
+	if (user.UserName != id || user.Email != id) || user.Password != mdHashing(password) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		return
+	} else if (user.UserName == id || user.Email == id) && user.Password == mdHashing(password) {
+		// delete the user
+		db.Db.Table("users").Delete(&user)
+		c.JSON(http.StatusAccepted, gin.H{"message": "user successfully deleted"})
+		return
+	}
+
+}
+
+func ChangeCreator(c *gin.Context) {
+	// check if user is connected
+	user, message := GetConnectedUser(c)
+	if message == "error" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user not connected"})
+		return
+	}
+
+	creatorName := c.GetString("creatorname")
+	// check if the creator name is already taken
+	var creator structs.Creator
+	err := db.Db.Table("creators").Where("creatorname = ?", creatorName).First(&creator).Error
+	if err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "This creator name is already taken"})
+		return
+	}
+
+	// create the reference in the database
 	db.Db.Create(structs.Creator{
+		User:        user,
 		CreatorName: creatorName,
 		Followers:   0,
 		Subscribers: 0,
@@ -576,6 +595,7 @@ func ChangeCreator(c *gin.Context) {
 }
 
 func SignUp(c *gin.Context) {
+	// check if username is valid
 	userName := c.GetString("username")
 	usernamePattern := "^[a-zA-Z0-9_]+$"
 	regex := regexp.MustCompile(usernamePattern)
@@ -584,20 +604,24 @@ func SignUp(c *gin.Context) {
 		return
 	}
 
+	// check if username is already taken
 	if db.Db.Table("users").Where("username = ?", userName).First(&structs.User{}).Error != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "wrongUsername", "message": "Chosen username is already in use"})
 		return
 	}
 
+	// check if email is valid
 	email := c.GetString("email")
 	if db.Db.Table("users").Where("username = ?", email).First(&structs.User{}).Error != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "wrongEmail", "message": "Chosen email is already in use"})
 		return
 	}
 
+	// get informations
 	fullName := c.GetString("fullname")
 	password := mdHashing(c.GetString("password"))
 
+	// generate a token and set it as a cookie
 	randomBytes := make([]byte, 50)
 	_, err := rand.Read(randomBytes)
 	if err != nil {
@@ -606,23 +630,38 @@ func SignUp(c *gin.Context) {
 	token := base64.StdEncoding.EncodeToString(randomBytes)
 	c.SetCookie("connection", token, 2628000, "/", "http:localhost", true, true)
 
-	db.Db.Table("users").Create(&structs.User{UserName: userName, FullName: fullName, Email: email, Password: password, AccessToken: token})
+	// create the user
+	db.Db.Table("users").Create(&structs.User{
+		UserName:    userName,
+		FullName:    fullName,
+		Email:       email,
+		Password:    password,
+		AccessToken: token,
+	})
+
+	// redirect to the home page
 	c.Redirect(http.StatusSeeOther, "/home")
 }
 
 func SignIn(c *gin.Context) {
-	var user structs.User
+	// get the credentials
 	id := c.GetString("id")
 	password := mdHashing(c.GetString("password"))
-	if db.Db.Table("users").Where("(username = ? OR email = ?) AND password = ?", id, id, password).First(&user).Error == nil {
 
+	// check if the credentials are valid
+	var user structs.User
+	if db.Db.Table("users").Where("(username = ? OR email = ?) AND password = ?", id, id, password).First(&user).Error == nil {
+		// set the cookie
 		token := user.AccessToken
 		c.SetCookie("connection", token, 2628000, "/", "http:localhost", true, true)
 	}
+
+	// redirect to the home page
 	c.Redirect(http.StatusSeeOther, "/home")
 }
 
 func ResetPasswword(c *gin.Context) {
+
 	mail := c.GetString("mail")
 	rtr := gin.Default()
 
