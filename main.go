@@ -27,6 +27,7 @@ import (
 	"package/web/app/creatorPage"
 	"package/web/app/home"
 	"package/web/app/logoff"
+	"package/web/app/manage"
 	"package/web/app/privateAccess"
 	"package/web/app/publicAccess"
 	categorySearch "package/web/app/searchByCategory"
@@ -78,6 +79,7 @@ func main() {
 	rtr.GET("/logoff", logoff.Handler)                                  // log the user off
 	rtr.GET("/category/"+category, categorySearch.Handler)              // search by category
 	rtr.GET("/user", user.Handler)
+	rtr.GET("/management", manage.Handler)
 	rtr.GET("/settings")
 
 	rtr.GET("/getToken", func(c *gin.Context) {
@@ -331,12 +333,13 @@ func PostVideos(c *gin.Context) {
 	artist := user.FullName
 	isPublic := c.GetBool("public")
 	category := c.GetString("Category")
+	db.Db.Table("creators").Where("user = ?", user).First(&creator)
 
 	//create the reference in the database
 	db.Db.Table("videos").Create(&structs.Video{
 		ID:       file.Filename,
 		Title:    title,
-		Owner:    user,
+		Owner:    creator,
 		Artist:   artist,
 		Views:    0,
 		Category: category,
@@ -355,8 +358,10 @@ func DeleteVideo(c *gin.Context) {
 
 	// check if the user is the owner of the video
 	var video structs.Video
+	var creator structs.Creator
 	db.Db.Table("videos").Where("id = ?", c.GetString("id")).First(&video)
-	if &user == &video.Owner || user.UserName == "root" {
+	db.Db.Table("creators").Where("user = ?", user).First(&creator)
+	if creator.CreatorName == video.Owner.CreatorName || user.UserName == "root" {
 		// delete the video
 		db.Db.Table("videos").Where("id = ?", c.GetString("id")).Delete(&video)
 	} else {
@@ -385,7 +390,7 @@ func ModifyVideo(c *gin.Context) {
 	// check if the user is the owner of the video
 	var creator structs.Creator
 	db.Db.Table("creators").Where("user = ?", user).First(&creator)
-	if &video.Owner != &creator.User {
+	if video.Owner.CreatorName != creator.CreatorName {
 		c.JSON(http.StatusForbidden, gin.H{"error": "not allowed", "message": "You are not allowed to perform this action"})
 		return
 	}
@@ -495,7 +500,7 @@ func TrendingAlgorithm() {
 
 }
 
-func getAllVideosFromACreator(username string) []structs.Video {
+func getAllVideosFromACreator(username string) []structs.Video { //change this to use the creator function instead of username string
 	// Fetch all the videos of a creator
 	var videos []structs.Video
 	db.Db.Table("videos").Where("owner = ?", username).Find(&videos)

@@ -5,12 +5,11 @@ type Video struct {
 	Folder      string  `gorm:"folder" json:"folder"`
 	Title       string  `gorm:"column:title" json:"title"`
 	Artist      string  `gorm:"column:artist" json:"artist"`
-	Owner       User    `gorm:"column:owner" json:"owner"`
+	Owner       Creator `gorm:"column:owner" json:"owner"`
 	Date        string  `gorm:"column:date" json:"date"`
 	Category    string  `gorm:"column:category" json:"category"`
 	Views       int     `gorm:"column:views" json:"views"`
 	Likes       int     `gorm:"column:likes" json:"likes"`
-	Dislikes    int     `gorm:"column:dislikes" json:"dislikes"`
 	Score       float64 `gorm:"column:score" json:"score"`
 	Description string  `gorm:"column:description" json:"description"`
 	FilePath    string  `gorm:"colum:filepath" json:"filepath"`
